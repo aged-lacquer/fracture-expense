@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fracture — Weekly P&L Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0a0b;--s1:#141416;--s2:#1c1c20;--s3:#242429;--bd:#2a2a30;--bd2:#3a3a42;--tx:#e8e8ec;--txd:#8888a0;--txm:#55556a;--ac:#5ce0d2;--acd:rgba(92,224,210,.12);--acm:rgba(92,224,210,.25);--red:#ff6b6b;--redd:rgba(255,107,107,.12);--amb:#f0c050;--ambd:rgba(240,192,80,.12);--grn:#6bcf6b;--grnd:rgba(107,207,107,.12);--r:8px;--mono:'JetBrains Mono',monospace;--sans:'DM Sans',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--sans);background:var(--bg);color:var(--tx);min-height:100vh}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
+.hidden{display:none!important}
+
+/* HEADER */
+.hdr{padding:16px 24px;border-bottom:1px solid var(--bd);background:var(--s1);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.hdr-left{display:flex;align-items:center;gap:16px}
+.logo{font-family:var(--mono);font-weight:700;font-size:16px;color:var(--ac);letter-spacing:-.5px}.logo span{color:var(--txm);font-weight:400}
+.hdr-stats{display:flex;gap:16px;font-family:var(--mono);font-size:12px}
+.st{color:var(--txd)}.st b{font-weight:600}.st.done b{color:var(--grn)}.st.pend b{color:var(--amb)}.st.rule b{color:var(--ac)}
+.week-range{display:flex;align-items:center;gap:8px;font-size:13px}
+.week-range input{padding:6px 10px;border:1px solid var(--bd);border-radius:var(--r);background:var(--s2);color:var(--tx);font-family:var(--sans);font-size:13px;outline:none;width:130px}
+.week-range input:focus{border-color:var(--ac)}
+
+/* LAYOUT */
+.app{display:flex;height:calc(100vh - 57px)}
+.sidebar{width:240px;border-right:1px solid var(--bd);background:var(--s1);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.sb-sec{padding:14px;border-bottom:1px solid var(--bd)}
+.sb-sec h3{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--txm);margin-bottom:10px}
+.sb-actions{padding:14px;margin-top:auto;display:flex;flex-direction:column;gap:6px}
+
+/* BUTTONS */
+.btn{padding:8px 14px;border-radius:var(--r);border:1px solid var(--bd);background:var(--s2);color:var(--tx);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;text-align:center;white-space:nowrap}
+.btn:hover{background:var(--s3);border-color:var(--bd2)}.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-p{background:var(--ac);color:var(--bg);border-color:var(--ac);font-weight:600}.btn-p:hover{opacity:.9}
+.btn-d{border-color:var(--red);color:var(--red)}.btn-d:hover{background:var(--redd)}
+.btn-sm{padding:6px 10px;font-size:11px}
+
+/* SOURCE TAGS */
+.src-tag{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:var(--r);background:var(--s2);margin-bottom:3px;font-size:12px;cursor:pointer;transition:background .15s}
+.src-tag:hover{background:var(--s3)}.src-tag.active{background:var(--acd);color:var(--ac)}
+.src-tag .cnt{font-family:var(--mono);font-size:10px;color:var(--txm)}
+.src-tag.active .cnt{color:var(--ac)}
+.src-rm{background:none;border:none;color:var(--txm);cursor:pointer;font-size:14px;padding:0 0 0 6px;line-height:1}.src-rm:hover{color:var(--red)}
+
+/* FILE DROP */
+.file-drop{border:2px dashed var(--bd2);border-radius:12px;padding:40px 20px;text-align:center;cursor:pointer;transition:all .15s;background:var(--s1);margin:16px}
+.file-drop:hover,.file-drop.drag{border-color:var(--ac);background:var(--acd)}
+.file-drop h3{font-family:var(--mono);font-size:15px;margin-bottom:6px}
+.file-drop p{color:var(--txd);font-size:13px;margin-bottom:14px;line-height:1.5}
+.file-drop input[type=file]{display:none}
+.file-drop .or{color:var(--txm);font-size:12px;margin:10px 0}
+.paste-area{width:100%;min-height:120px;background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);padding:12px;font-family:var(--mono);font-size:11px;color:var(--tx);resize:vertical;outline:none;margin-top:8px}
+.paste-area:focus{border-color:var(--ac)}
+.paste-area::placeholder{color:var(--txm)}
+.source-select{padding:8px 12px;border:1px solid var(--bd);border-radius:var(--r);background:var(--s2);color:var(--tx);font-family:var(--sans);font-size:13px;outline:none;width:100%;margin-top:8px}
+.source-select:focus{border-color:var(--ac)}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* CATEGORIZE VIEW */
+.cat-view{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.cur-txn{padding:20px 24px;border-bottom:1px solid var(--bd);background:var(--s1)}
+.txn-ctr{font-family:var(--mono);font-size:10px;color:var(--txm);margin-bottom:6px;letter-spacing:1px;text-transform:uppercase}
+.txn-desc{font-size:17px;font-weight:600;margin-bottom:4px;word-break:break-word}
+.txn-meta{display:flex;gap:16px;font-family:var(--mono);font-size:12px;color:var(--txd);flex-wrap:wrap;align-items:center}
+.txn-amt{font-weight:600}.txn-amt.neg{color:var(--red)}.txn-amt.pos{color:var(--grn)}
+.txn-src{padding:2px 8px;background:var(--s3);border-radius:4px;font-size:10px}
+.txn-date{font-size:11px}
+.auto-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--acd);color:var(--ac);border-radius:4px;font-family:var(--mono);font-size:10px;margin-top:8px;font-weight:500}
+
+/* ROUTING AREA */
+.route-area{flex:1;overflow-y:auto;padding:20px 24px}
+.route-section{margin-bottom:20px}
+.route-label{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--txm);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.route-label::after{content:'';flex:1;height:1px;background:var(--bd)}
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:6px}
+.cat-btn{display:flex;align-items:center;gap:8px;padding:9px 11px;border:1px solid var(--bd);border-radius:var(--r);background:var(--s1);color:var(--tx);font-size:12px;cursor:pointer;transition:all .12s;text-align:left}
+.cat-btn:hover{border-color:var(--ac);background:var(--acd)}
+.cat-btn .key{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 4px;border-radius:4px;background:var(--s3);font-family:var(--mono);font-size:10px;font-weight:600;color:var(--ac);flex-shrink:0}
+.cat-btn .lbl{line-height:1.2;font-size:12px}
+.cat-btn.matched{border-color:var(--ac);background:var(--acd)}
+.check-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px}
+.check-btn{padding:8px 10px;border:1px solid var(--bd);border-radius:var(--r);background:var(--s1);color:var(--txd);font-size:11px;cursor:pointer;transition:all .12s;text-align:center;font-family:var(--mono)}
+.check-btn:hover{border-color:var(--amb);color:var(--amb);background:var(--ambd)}
+.check-btn.spec{border-style:dashed}.check-btn.spec:hover{border-color:var(--ac);color:var(--ac);background:var(--acd)}
+
+/* ACTION BAR */
+.act-bar{padding:10px 24px;border-top:1px solid var(--bd);display:flex;gap:14px;align-items:center;background:var(--s1);font-size:12px;color:var(--txd);flex-wrap:wrap}
+.act-bar kbd{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 4px;border-radius:3px;background:var(--s3);font-family:var(--mono);font-size:9px;color:var(--txd);margin:0 2px}
+
+/* SUMMARY VIEW */
+.sum-view{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.sum-hdr{padding:18px 24px;border-bottom:1px solid var(--bd);background:var(--s1);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.sum-hdr h2{font-family:var(--mono);font-size:16px;font-weight:600}
+.sum-body{flex:1;overflow-y:auto;padding:20px 24px}
+.sum-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.sum-tbl th{text-align:left;padding:8px 12px;font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--txm);border-bottom:1px solid var(--bd)}
+.sum-tbl td{padding:8px 12px;border-bottom:1px solid var(--bd)}
+.sum-tbl .cn{font-weight:500}.sum-tbl .cn.indent{padding-left:28px;color:var(--txd);font-weight:400}
+.sum-tbl .am{font-family:var(--mono);font-weight:600;text-align:right}
+.sum-tbl .am.neg{color:var(--red)}.sum-tbl .am.pos{color:var(--grn)}
+.sum-tbl tr.sub td{border-top:2px solid var(--bd2);font-weight:600;background:var(--s1)}
+.sum-tbl tr.hdr-row td{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--txm);padding-top:16px;border-bottom:none}
+
+/* TRANSACTION LIST */
+.txn-list-tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:20px}
+.txn-list-tbl th{text-align:left;padding:6px 10px;font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--txm);border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--bg)}
+.txn-list-tbl td{padding:6px 10px;border-bottom:1px solid var(--bd);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.txn-list-tbl .route-tag{padding:2px 6px;border-radius:3px;font-family:var(--mono);font-size:10px}
+.txn-list-tbl .route-opex{background:var(--acd);color:var(--ac)}
+.txn-list-tbl .route-check{background:var(--ambd);color:var(--amb)}
+.txn-list-tbl .route-skip{background:var(--s3);color:var(--txm)}
+
+/* RULES VIEW */
+.rules-view{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.rules-hdr{padding:18px 24px;border-bottom:1px solid var(--bd);background:var(--s1);display:flex;justify-content:space-between;align-items:center}
+.rules-hdr h2{font-family:var(--mono);font-size:16px;font-weight:600}
+.rules-body{flex:1;overflow-y:auto;padding:16px 24px}
+.rule-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--bd);font-size:12px;gap:8px}
+.rule-row .vendor{font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rule-row .mapped{font-family:var(--mono);font-size:10px;padding:2px 6px;border-radius:4px;white-space:nowrap}
+.rule-row .mapped.opex{background:var(--acd);color:var(--ac)}
+.rule-row .mapped.chk{background:var(--ambd);color:var(--amb)}
+.rule-del{background:none;border:none;color:var(--txm);cursor:pointer;font-size:13px}.rule-del:hover{color:var(--red)}
+.empty{text-align:center;padding:40px 20px;color:var(--txm);font-size:13px}
+
+/* TABS */
+.tab-bar{display:flex;border-bottom:1px solid var(--bd);background:var(--s1)}
+.tab{padding:10px 20px;font-size:13px;font-weight:500;color:var(--txd);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.tab:hover{color:var(--tx)}.tab.active{color:var(--ac);border-bottom-color:var(--ac)}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;right:20px;padding:10px 18px;background:var(--ac);color:var(--bg);font-family:var(--mono);font-size:12px;font-weight:600;border-radius:var(--r);opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none;z-index:999}
+.toast.show{opacity:1;transform:translateY(0)}
+
+/* SEARCH */
+.cat-search{margin-bottom:8px;padding:7px 10px;width:100%;max-width:260px;border:1px solid var(--bd);border-radius:var(--r);background:var(--s1);color:var(--tx);font-family:var(--sans);font-size:12px;outline:none}
+.cat-search:focus{border-color:var(--ac)}.cat-search::placeholder{color:var(--txm)}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-left">
+    <div class="logo">fracture <span>/ weekly p&l</span></div>
+    <div class="week-range">
+      <span style="font-size:12px;color:var(--txd)">Week:</span>
+      <input type="date" id="week-start" />
+      <span style="color:var(--txm)">→</span>
+      <input type="date" id="week-end" />
+    </div>
+  </div>
+  <div class="hdr-stats">
+    <div class="st done">Done: <b id="st-done">0</b></div>
+    <div class="st pend">Pending: <b id="st-pend">0</b></div>
+    <div class="st rule">Rules: <b id="st-rules">0</b></div>
+  </div>
+</div>
+
+<div class="app">
+  <div class="sidebar">
+    <div class="sb-sec">
+      <h3>Sources Loaded</h3>
+      <div id="src-list"></div>
+    </div>
+    <div class="sb-sec">
+      <h3>Views</h3>
+      <button class="btn" style="width:100%;margin-bottom:4px" id="nav-import">Import CSV</button>
+      <button class="btn" style="width:100%;margin-bottom:4px" id="nav-cat">Categorize</button>
+      <button class="btn" style="width:100%;margin-bottom:4px" id="nav-sum">P&L Summary</button>
+      <button class="btn" style="width:100%" id="nav-rules">Vendor Rules</button>
+    </div>
+    <div class="sb-actions">
+      <button class="btn btn-p" id="copy-pl" disabled>Copy P&L Summary</button>
+      <button class="btn" id="copy-txns" disabled>Copy Transaction List</button>
+      <button class="btn" id="export-rules">Export Rules</button>
+      <button class="btn" id="import-rules">Import Rules</button>
+      <button class="btn btn-d" id="clear-all">Clear Session</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- IMPORT VIEW -->
+    <div id="v-import">
+      <div class="file-drop" id="file-drop">
+        <h3>Drop CSV files here</h3>
+        <p>Supports all 5 sources — auto-detected by filename.<br>
+        Chase1815, DK AMEX (activity.csv), Chase9219, Chase6206, Chase7819</p>
+        <button class="btn btn-p" onclick="document.getElementById('file-input').click()">Choose Files</button>
+        <input type="file" id="file-input" accept=".csv" multiple />
+        <div class="or">— or paste raw CSV below —</div>
+        <select class="source-select" id="paste-source">
+          <option value="">Select source for paste...</option>
+          <option value="chase1815">Chase Checking 1815</option>
+          <option value="amex">DK AMEX</option>
+          <option value="chase9219">DL ChaseInk 9219</option>
+          <option value="chase6206">DK ChaseInk 6206</option>
+          <option value="chase7819">JL ChaseInk 7819</option>
+        </select>
+        <textarea class="paste-area" id="paste-area" placeholder="Paste CSV data here..."></textarea>
+        <button class="btn btn-p" style="margin-top:8px" id="paste-import">Import Pasted Data</button>
+      </div>
+    </div>
+
+    <!-- CATEGORIZE VIEW -->
+    <div class="cat-view hidden" id="v-cat">
+      <div class="cur-txn" id="cur-txn">
+        <div class="txn-ctr" id="txn-ctr">TRANSACTION 1 OF 10</div>
+        <div class="txn-desc" id="txn-desc">—</div>
+        <div class="txn-meta">
+          <span class="txn-amt" id="txn-amt">$0.00</span>
+          <span class="txn-src" id="txn-src">—</span>
+          <span class="txn-date" id="txn-date">—</span>
+        </div>
+        <div class="auto-badge hidden" id="auto-badge">↻ Auto-matched</div>
+      </div>
+      <div class="route-area">
+        <input class="cat-search" id="cat-search" placeholder="Type to filter..." />
+        <div class="route-section">
+          <div class="route-label">OPEX Categories</div>
+          <div class="cat-grid" id="cat-grid"></div>
+        </div>
+        <div class="route-section">
+          <div class="route-label">Non-OPEX Check Routes</div>
+          <div class="check-grid" id="check-grid"></div>
+        </div>
+      </div>
+      <div class="act-bar">
+        <span><kbd>S</kbd> Skip</span>
+        <span><kbd>Z</kbd> Undo</span>
+        <span><kbd>↵</kbd> Confirm auto-match</span>
+        <span><kbd>/</kbd> Search</span>
+      </div>
+    </div>
+
+    <!-- SUMMARY VIEW -->
+    <div class="sum-view hidden" id="v-sum">
+      <div class="sum-hdr">
+        <h2>Weekly P&L — Expense Side</h2>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-p btn-sm" id="copy-pl2">Copy Summary</button>
+          <button class="btn btn-sm" id="copy-txns2">Copy Transactions</button>
+        </div>
+      </div>
+      <div class="tab-bar">
+        <div class="tab active" data-tab="summary">P&L Summary</div>
+        <div class="tab" data-tab="txnlist">Transaction List</div>
+      </div>
+      <div class="sum-body" id="sum-body">
+        <table class="sum-tbl" id="sum-tbl"><thead><tr><th>Line Item</th><th style="text-align:right">Amount</th></tr></thead><tbody id="sum-tbody"></tbody></table>
+        <div class="hidden" id="txn-list-wrap">
+          <table class="txn-list-tbl" id="txn-list-tbl"><thead><tr><th>Date</th><th>Source</th><th>Description</th><th style="text-align:right">Amount</th><th>Routing</th><th>Category</th><th>Specifier</th></tr></thead><tbody id="txn-tbody"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- RULES VIEW -->
+    <div class="rules-view hidden" id="v-rules">
+      <div class="rules-hdr">
+        <h2>Vendor Rules</h2>
+        <span style="font-size:12px;color:var(--txd)" id="rules-cnt">0 rules</span>
+      </div>
+      <div class="rules-body" id="rules-body"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="rules-file" accept=".json" style="display:none" />
+
+<script>
+// ====================== CONSTANTS ======================
+const OPEX_CATS = [
+  "Creative Location","Creative Staff","Creative Equipment",
+  "Shipping Fees","Samples","Import Fees",
+  "Rent","Utilities","Office Supplies","Software/Subscriptions",
+  "Salaries","Transportation","Food",
+  "Financial Services","Interest","Legal",
+  "Advertisement","Influencer Gifting"
+];
+
+const NON_OPEX_CHECKS = ["COGS","3PL","SHIPPO","META","TIKTOK","TAX","PAYOUT","LOAN"];
+const SPECIFIER_CHECKS = ["VPM","SHOPIFY","ADOBE","GSUITE","KLAVIYO","OPENAI","SKOOL"];
+
+const KEYS = '1234567890abcdefghijklmnop'.split('');
+
+const SOURCE_MAP = {
+  chase1815: {name:"Chase Checking 1815", sign:"neg", skipPositive:true, skipPayment:false},
+  amex:      {name:"DK AMEX",             sign:"pos", skipPositive:false, skipPayment:false},
+  chase9219: {name:"DL ChaseInk 9219",    sign:"neg", skipPositive:false, skipPayment:true},
+  chase6206: {name:"DK ChaseInk 6206",    sign:"neg", skipPositive:false, skipPayment:true},
+  chase7819: {name:"JL ChaseInk 7819",    sign:"neg", skipPositive:false, skipPayment:true}
+};
+
+// P&L output structure
+const PL_STRUCTURE = [
+  {type:'header', label:'MARKETING OPEX'},
+  {type:'line', cat:'Creative Location'},
+  {type:'line', cat:'Creative Staff'},
+  {type:'line', cat:'Creative Equipment'},
+  {type:'sub', label:'Marketing Opex Total', cats:['Creative Location','Creative Staff','Creative Equipment']},
+  {type:'header', label:'FULFILLMENT OPEX'},
+  {type:'line', cat:'Shipping Fees'},
+  {type:'sub', label:'Fulfillment Opex Total', cats:['Shipping Fees']},
+  {type:'header', label:'INFRASTRUCTURE OPEX'},
+  {type:'line', cat:'Rent'},
+  {type:'line', cat:'Utilities'},
+  {type:'line', cat:'Office Supplies'},
+  {type:'line', cat:'Software/Subscriptions'},
+  {type:'sub', label:'Infra Opex Total', cats:['Rent','Utilities','Office Supplies','Software/Subscriptions']},
+  {type:'header', label:'OPERATIONS OPEX'},
+  {type:'line', cat:'Salaries'},
+  {type:'line', cat:'Transportation'},
+  {type:'line', cat:'Food'},
+  {type:'sub', label:'Operations Opex Total', cats:['Salaries','Transportation','Food']},
+  {type:'header', label:'FINANCIAL SERVICES OPEX'},
+  {type:'line', cat:'Financial Services'},
+  {type:'line', cat:'Interest'},
+  {type:'line', cat:'Legal'},
+  {type:'sub', label:'Financial Services Opex Total', cats:['Financial Services','Interest','Legal']},
+  {type:'header', label:'OTHER OPEX'},
+  {type:'line', cat:'Advertisement'},
+  {type:'line', cat:'Influencer Gifting'},
+  {type:'line', cat:'Samples'},
+  {type:'line', cat:'Import Fees'},
+  {type:'sub', label:'TOTAL OPEX', cats: OPEX_CATS},
+  {type:'header', label:'NON-OPEX CHECK ROUTES'},
+  {type:'check', cat:'COGS'},
+  {type:'check', cat:'3PL'},
+  {type:'check', cat:'SHIPPO'},
+  {type:'check', cat:'META'},
+  {type:'check', cat:'TIKTOK'},
+  {type:'check', cat:'TAX'},
+  {type:'check', cat:'PAYOUT'},
+  {type:'check', cat:'LOAN'},
+];
+
+// ====================== STATE ======================
+let txns = []; // {id, date, desc, amount, absAmount, source, sourceKey, routing:null, category:null, specifier:null, skipped:false}
+let curIdx = -1;
+let history = [];
+let rules = {}; // {normalizedVendor: {routing:'opex'|'check', category:'...', specifier:null|'...'}}
+let catFilter = '';
+const RULES_KEY = 'fracture_pl_rules_v2';
+
+// ====================== PERSISTENCE ======================
+function loadRules(){try{const r=localStorage.getItem(RULES_KEY);if(r)rules=JSON.parse(r)}catch(e){}}
+function saveRules(){localStorage.setItem(RULES_KEY,JSON.stringify(rules));updateStats()}
+
+function normVendor(d){
+  return d.toUpperCase()
+    .replace(/\d{2,4}[\/\-]\d{2,4}([\/\-]\d{2,4})?/g,'')
+    .replace(/#\w+/g,'').replace(/\s{2,}/g,' ')
+    .replace(/ORIG CO NAME:.*$/,'')
+    .replace(/JPM\w+/g,'').replace(/\d{10,}/g,'')
+    .trim().slice(0,60);
+}
+
+// ====================== CSV PARSING ======================
+function detectSource(filename, firstLine){
+  const fn = filename.toLowerCase();
+  if(fn.includes('1815')) return 'chase1815';
+  if(fn.includes('9219')) return 'chase9219';
+  if(fn.includes('6206')) return 'chase6206';
+  if(fn.includes('7819')) return 'chase7819';
+  if(fn.startsWith('activity') || firstLine.startsWith('Date,Receipt')) return 'amex';
+  // Try header detection
+  if(firstLine.includes('Details,Posting Date')) return 'chase1815';
+  if(firstLine.includes('Card,Transaction Date')) {
+    // Could be any ChaseInk - check card number in first data row
+    return null; // will need user selection
+  }
+  return null;
+}
+
+function parseCSV(text, sourceKey){
+  const lines = text.trim().split(/\r?\n/);
+  if(lines.length < 2) return [];
+  const src = SOURCE_MAP[sourceKey];
+  if(!src) return [];
+  const header = lines[0];
+  const results = [];
+  
+  for(let i=1; i<lines.length; i++){
+    const cols = parseCSVLine(lines[i]);
+    if(!cols || cols.length < 3) continue;
+    
+    let date, desc, amount;
+    
+    if(sourceKey === 'chase1815'){
+      // Details, Posting Date, Description, Amount, Type, Balance, Check#
+      date = cols[1]; desc = cols[2]; amount = parseFloat((cols[3]||'').replace(/[$,]/g,''));
+      if(isNaN(amount)) continue;
+      // Skip positives (revenue)
+      if(amount > 0) continue;
+    } else if(sourceKey === 'amex'){
+      // Date, Receipt, Description, Amount
+      date = cols[0]; desc = cols[2]; amount = parseFloat((cols[3]||'').replace(/[$,]/g,''));
+      if(isNaN(amount)) continue;
+      // AMEX: positive = expense, flip to negative for our internal representation
+      amount = -Math.abs(amount);
+    } else {
+      // ChaseInk: Card, Transaction Date, Post Date, Description, Category, Type, Amount, Memo
+      date = cols[1]; desc = cols[3]; 
+      const type = (cols[5]||'').trim();
+      amount = parseFloat((cols[6]||'').replace(/[$,]/g,''));
+      if(isNaN(amount)) continue;
+      // Skip payments
+      if(type === 'Payment') continue;
+      // Expenses are already negative
+    }
+    
+    // Clean description
+    desc = (desc||'').replace(/^"|"$/g,'').trim();
+    if(!desc) continue;
+    
+    results.push({
+      id: crypto.randomUUID(),
+      date: parseDate(date),
+      dateStr: (date||'').trim(),
+      desc,
+      amount, // always negative for expenses
+      absAmount: Math.abs(amount),
+      source: src.name,
+      sourceKey,
+      routing: null, // 'opex' or 'check'
+      category: null,
+      specifier: null,
+      skipped: false
+    });
+  }
+  return results;
+}
+
+function parseCSVLine(line){
+  const result=[];let cur='';let inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c==='"'){inQ=!inQ}
+    else if(c===','&&!inQ){result.push(cur.trim());cur=''}
+    else{cur+=c}
+  }
+  result.push(cur.trim());
+  return result;
+}
+
+function parseDate(s){
+  if(!s)return null;
+  s=s.trim();
+  const m=s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if(m){
+    let y=parseInt(m[3]);if(y<100)y+=2000;
+    return new Date(y,parseInt(m[1])-1,parseInt(m[2]));
+  }
+  return new Date(s);
+}
+
+// ====================== DATE FILTER ======================
+function filterByWeek(){
+  const s=document.getElementById('week-start').value;
+  const e=document.getElementById('week-end').value;
+  if(!s||!e) return txns;
+  const sd=new Date(s+'T00:00:00');
+  const ed=new Date(e+'T23:59:59');
+  return txns.filter(t=>{
+    if(!t.date) return true;
+    return t.date>=sd && t.date<=ed;
+  });
+}
+
+function getWeekTxns(){
+  return filterByWeek();
+}
+
+// ====================== UI HELPERS ======================
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
+const views=['v-import','v-cat','v-sum','v-rules'];
+function showView(id){views.forEach(v=>{const el=$('#'+v);if(el)el.classList.toggle('hidden',v!==id)})}
+
+let toastT;
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2200)}
+
+function updateStats(){
+  const wt=getWeekTxns();
+  const done=wt.filter(t=>t.routing||t.skipped).length;
+  const pend=wt.filter(t=>!t.routing&&!t.skipped).length;
+  $('#st-done').textContent=done;
+  $('#st-pend').textContent=pend;
+  $('#st-rules').textContent=Object.keys(rules).length;
+  $('#copy-pl').disabled=done===0;
+  $('#copy-txns').disabled=done===0;
+}
+
+function renderSources(){
+  const c=$('#src-list');
+  const srcs=[...new Set(txns.map(t=>t.source))];
+  c.innerHTML='';
+  srcs.forEach(s=>{
+    const cnt=txns.filter(t=>t.source===s).length;
+    const d=document.createElement('div');d.className='src-tag';
+    d.innerHTML=`<span>${s}</span><span class="cnt">${cnt}</span>`;
+    c.appendChild(d);
+  });
+}
+
+// ====================== DEFAULT WEEK ======================
+function setDefaultWeek(){
+  const today=new Date();
+  const day=today.getDay();
+  // Last Monday
+  const lastMon=new Date(today);
+  lastMon.setDate(today.getDate()-((day===0?6:day-1)+7));
+  const lastSun=new Date(lastMon);
+  lastSun.setDate(lastMon.getDate()+6);
+  $('#week-start').value=fmt(lastMon);
+  $('#week-end').value=fmt(lastSun);
+}
+function fmt(d){return d.toISOString().split('T')[0]}
+
+// ====================== CATEGORY GRID ======================
+function renderCatGrid(){
+  const grid=$('#cat-grid');
+  grid.innerHTML='';
+  const f=catFilter.toLowerCase();
+  OPEX_CATS.forEach((cat,i)=>{
+    if(f&&!cat.toLowerCase().includes(f))return;
+    const b=document.createElement('button');b.className='cat-btn';
+    const k=KEYS[i]||'';
+    b.innerHTML=`${k?`<span class="key">${k.toUpperCase()}</span>`:''}<span class="lbl">${cat}</span>`;
+    b.dataset.cat=cat;b.dataset.idx=i;
+    b.addEventListener('click',()=>assignOPEX(cat));
+    grid.appendChild(b);
+  });
+  
+  const cgrid=$('#check-grid');
+  cgrid.innerHTML='';
+  NON_OPEX_CHECKS.forEach(ch=>{
+    if(f&&!ch.toLowerCase().includes(f))return;
+    const b=document.createElement('button');b.className='check-btn';
+    b.textContent=ch;b.addEventListener('click',()=>assignCheck(ch));
+    cgrid.appendChild(b);
+  });
+  // Specifiers shown as dashed
+  SPECIFIER_CHECKS.forEach(ch=>{
+    if(f&&!ch.toLowerCase().includes(f))return;
+    const b=document.createElement('button');b.className='check-btn spec';
+    b.textContent='⚬ '+ch;
+    b.title='OPEX specifier — also marks as OPEX';
+    b.addEventListener('click',()=>assignOPEXWithSpecifier(ch));
+    cgrid.appendChild(b);
+  });
+}
+
+// ====================== CATEGORIZATION ======================
+function nextUncategorized(){
+  const wt=getWeekTxns();
+  for(let i=0;i<wt.length;i++){
+    if(!wt[i].routing&&!wt[i].skipped)return txns.indexOf(wt[i]);
+  }
+  return -1;
+}
+
+function showTxn(idx){
+  if(idx<0||idx>=txns.length){
+    showView('v-sum');renderSummary();toast('All transactions categorized!');return;
+  }
+  curIdx=idx;
+  const t=txns[idx];
+  const wt=getWeekTxns();
+  const done=wt.filter(x=>x.routing||x.skipped).length;
+  $('#txn-ctr').textContent=`TRANSACTION ${done+1} OF ${wt.length}`;
+  $('#txn-desc').textContent=t.desc;
+  const ae=$('#txn-amt');
+  ae.textContent='$'+t.absAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  ae.className='txn-amt neg';
+  $('#txn-src').textContent=t.source;
+  $('#txn-date').textContent=t.dateStr;
+  
+  // Check rules
+  const nv=normVendor(t.desc);
+  const rule=rules[nv];
+  const badge=$('#auto-badge');
+  if(rule){
+    badge.classList.remove('hidden');
+    const label=rule.routing==='opex'?rule.category:rule.category;
+    badge.textContent='↻ Auto-match: '+label+(rule.specifier?' + '+rule.specifier:'')+' — press Enter';
+    $$('.cat-btn').forEach(b=>b.classList.toggle('matched',rule.routing==='opex'&&b.dataset.cat===rule.category));
+  }else{
+    badge.classList.add('hidden');
+    $$('.cat-btn').forEach(b=>b.classList.remove('matched'));
+  }
+  catFilter='';$('#cat-search').value='';
+  renderCatGrid();updateStats();
+}
+
+function assignOPEX(cat, spec){
+  if(curIdx<0)return;
+  const t=txns[curIdx];
+  history.push({idx:curIdx,prev:{routing:t.routing,category:t.category,specifier:t.specifier,skipped:t.skipped}});
+  t.routing='opex';t.category=cat;t.specifier=spec||null;t.skipped=false;
+  const nv=normVendor(t.desc);
+  if(nv){rules[nv]={routing:'opex',category:cat,specifier:spec||null};saveRules();}
+  autoMatchRemaining();
+  const next=nextUncategorized();
+  if(next>=0){showTxn(next)}else{showView('v-sum');renderSummary();toast('All done!')}
+}
+
+function assignOPEXWithSpecifier(spec){
+  // For specifier checks, the category defaults to Software/Subscriptions
+  // but user might want a different one. For simplicity, map common specifiers:
+  const specCatMap={VPM:'Software/Subscriptions',SHOPIFY:'Software/Subscriptions',ADOBE:'Software/Subscriptions',GSUITE:'Software/Subscriptions',KLAVIYO:'Software/Subscriptions',OPENAI:'Software/Subscriptions',SKOOL:'Software/Subscriptions'};
+  assignOPEX(specCatMap[spec]||'Software/Subscriptions',spec);
+}
+
+function assignCheck(check){
+  if(curIdx<0)return;
+  const t=txns[curIdx];
+  history.push({idx:curIdx,prev:{routing:t.routing,category:t.category,specifier:t.specifier,skipped:t.skipped}});
+  t.routing='check';t.category=check;t.specifier=null;t.skipped=false;
+  const nv=normVendor(t.desc);
+  if(nv){rules[nv]={routing:'check',category:check,specifier:null};saveRules();}
+  autoMatchRemaining();
+  const next=nextUncategorized();
+  if(next>=0){showTxn(next)}else{showView('v-sum');renderSummary();toast('All done!')}
+}
+
+function skipTxn(){
+  if(curIdx<0)return;
+  const t=txns[curIdx];
+  history.push({idx:curIdx,prev:{routing:t.routing,category:t.category,specifier:t.specifier,skipped:t.skipped}});
+  t.skipped=true;
+  const next=nextUncategorized();
+  if(next>=0){showTxn(next)}else{showView('v-sum');renderSummary();toast('All done!')}
+}
+
+function undo(){
+  if(!history.length){toast('Nothing to undo');return}
+  const h=history.pop();
+  const t=txns[h.idx];
+  Object.assign(t,h.prev);
+  showTxn(h.idx);toast('Undone');
+}
+
+function confirmAutoMatch(){
+  if(curIdx<0)return;
+  const t=txns[curIdx];
+  const nv=normVendor(t.desc);
+  const rule=rules[nv];
+  if(!rule)return;
+  if(rule.routing==='opex')assignOPEX(rule.category,rule.specifier);
+  else assignCheck(rule.category);
+}
+
+function autoMatchRemaining(){
+  const wt=getWeekTxns();
+  for(const t of wt){
+    if(t.routing||t.skipped)continue;
+    const nv=normVendor(t.desc);
+    const rule=rules[nv];
+    if(rule){
+      t.routing=rule.routing;
+      t.category=rule.category;
+      t.specifier=rule.specifier||null;
+    }
+  }
+}
+
+// ====================== SUMMARY ======================
+function renderSummary(){
+  const wt=getWeekTxns().filter(t=>t.routing);
+  const tbody=$('#sum-tbody');
+  tbody.innerHTML='';
+  
+  // Aggregate OPEX by category
+  const opexTotals={};
+  OPEX_CATS.forEach(c=>opexTotals[c]=0);
+  const checkTotals={};
+  NON_OPEX_CHECKS.forEach(c=>checkTotals[c]=0);
+  
+  wt.forEach(t=>{
+    if(t.routing==='opex'&&opexTotals[t.category]!==undefined){
+      opexTotals[t.category]+=t.absAmount; // store as positive expense amount
+    }else if(t.routing==='check'&&checkTotals[t.category]!==undefined){
+      checkTotals[t.category]+=t.absAmount;
+    }
+  });
+  
+  PL_STRUCTURE.forEach(row=>{
+    const tr=document.createElement('tr');
+    if(row.type==='header'){
+      tr.className='hdr-row';
+      tr.innerHTML=`<td colspan="2">${row.label}</td>`;
+    }else if(row.type==='line'){
+      const amt=opexTotals[row.cat]||0;
+      tr.innerHTML=`<td class="cn indent">${row.cat}</td><td class="am neg">${amt?fmtM(-amt):'-'}</td>`;
+    }else if(row.type==='check'){
+      const amt=checkTotals[row.cat]||0;
+      tr.innerHTML=`<td class="cn indent">${row.cat}</td><td class="am neg">${amt?fmtM(-amt):'-'}</td>`;
+    }else if(row.type==='sub'){
+      const total=row.cats.reduce((s,c)=>s+(opexTotals[c]||0),0);
+      tr.className='sub';
+      tr.innerHTML=`<td class="cn">${row.label}</td><td class="am neg">${fmtM(-total)}</td>`;
+    }
+    tbody.appendChild(tr);
+  });
+  
+  // Render transaction list
+  const ltbody=$('#txn-tbody');
+  ltbody.innerHTML='';
+  const allWeek=getWeekTxns();
+  allWeek.forEach(t=>{
+    const tr=document.createElement('tr');
+    let routeClass='route-skip',routeLabel='—';
+    if(t.routing==='opex'){routeClass='route-opex';routeLabel='OPEX'}
+    else if(t.routing==='check'){routeClass='route-check';routeLabel='CHECK'}
+    else if(t.skipped){routeLabel='SKIP'}
+    tr.innerHTML=`<td>${t.dateStr}</td><td>${t.source}</td><td title="${t.desc}">${t.desc}</td><td class="am neg" style="text-align:right">$${t.absAmount.toFixed(2)}</td><td><span class="route-tag ${routeClass}">${routeLabel}</span></td><td>${t.category||'—'}</td><td>${t.specifier||''}</td>`;
+    ltbody.appendChild(tr);
+  });
+  
+  updateStats();
+}
+
+function fmtM(n){const s=n<0?'-':'';return s+'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+
+// ====================== COPY ======================
+function copyPL(){
+  const wt=getWeekTxns().filter(t=>t.routing);
+  const opexTotals={};OPEX_CATS.forEach(c=>opexTotals[c]=0);
+  const checkTotals={};NON_OPEX_CHECKS.forEach(c=>checkTotals[c]=0);
+  wt.forEach(t=>{
+    if(t.routing==='opex'&&opexTotals[t.category]!==undefined)opexTotals[t.category]+=t.absAmount;
+    else if(t.routing==='check'&&checkTotals[t.category]!==undefined)checkTotals[t.category]+=t.absAmount;
+  });
+  let lines=[];
+  PL_STRUCTURE.forEach(row=>{
+    if(row.type==='header')lines.push(row.label+'\t');
+    else if(row.type==='line')lines.push(row.cat+'\t'+(-opexTotals[row.cat]||0).toFixed(2));
+    else if(row.type==='check')lines.push(row.cat+'\t'+(-checkTotals[row.cat]||0).toFixed(2));
+    else if(row.type==='sub'){
+      const total=row.cats.reduce((s,c)=>s+(opexTotals[c]||0),0);
+      lines.push(row.label+'\t'+(-total).toFixed(2));
+    }
+  });
+  navigator.clipboard.writeText(lines.join('\n')).then(()=>toast('P&L summary copied')).catch(()=>toast('Copy failed'));
+}
+
+function copyTxns(){
+  const wt=getWeekTxns();
+  let lines=['Date\tSource\tDescription\tAmount\tRouting\tCategory\tSpecifier'];
+  wt.forEach(t=>{
+    if(!t.routing&&!t.skipped)return;
+    lines.push(`${t.dateStr}\t${t.source}\t${t.desc}\t${t.amount.toFixed(2)}\t${t.routing||'skip'}\t${t.category||''}\t${t.specifier||''}`);
+  });
+  navigator.clipboard.writeText(lines.join('\n')).then(()=>toast('Transaction list copied')).catch(()=>toast('Copy failed'));
+}
+
+// ====================== RULES MANAGEMENT ======================
+function renderRules(){
+  const b=$('#rules-body');
+  const entries=Object.entries(rules).sort((a,b)=>a[0].localeCompare(b[0]));
+  $('#rules-cnt').textContent=entries.length+' rules';
+  if(!entries.length){b.innerHTML='<div class="empty">No rules yet. They build automatically as you categorize.</div>';return}
+  b.innerHTML='';
+  entries.forEach(([v,r])=>{
+    const d=document.createElement('div');d.className='rule-row';
+    const cls=r.routing==='opex'?'opex':'chk';
+    const label=r.category+(r.specifier?' + '+r.specifier:'');
+    d.innerHTML=`<span class="vendor">${v}</span><span class="mapped ${cls}">${label}</span><button class="rule-del" data-v="${v}">&times;</button>`;
+    b.appendChild(d);
+  });
+}
+
+// ====================== EVENT HANDLERS ======================
+// File drop
+const fd=$('#file-drop');
+fd.addEventListener('dragover',e=>{e.preventDefault();fd.classList.add('drag')});
+fd.addEventListener('dragleave',()=>fd.classList.remove('drag'));
+fd.addEventListener('drop',e=>{e.preventDefault();fd.classList.remove('drag');handleFiles(e.dataTransfer.files)});
+$('#file-input').addEventListener('change',e=>handleFiles(e.target.files));
+
+function handleFiles(files){
+  let total=0;
+  Array.from(files).forEach(f=>{
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const text=ev.target.result;
+      const firstLine=text.split(/\r?\n/)[0];
+      let sk=detectSource(f.name,firstLine);
+      if(!sk){
+        // Try to detect from card number in first data row
+        const lines=text.split(/\r?\n/);
+        if(lines.length>1){
+          const cols=parseCSVLine(lines[1]);
+          if(cols[0]==='9219')sk='chase9219';
+          else if(cols[0]==='6206')sk='chase6206';
+          else if(cols[0]==='7819')sk='chase7819';
+        }
+      }
+      if(!sk){toast('Could not detect source for '+f.name);return}
+      const parsed=parseCSV(text,sk);
+      if(!parsed.length){toast('No expense transactions found in '+f.name);return}
+      txns.push(...parsed);
+      total+=parsed.length;
+      autoMatchRemaining();
+      renderSources();updateStats();
+      toast(`Loaded ${parsed.length} from ${SOURCE_MAP[sk].name}`);
+    };
+    reader.readAsText(f);
+  });
+}
+
+// Paste import
+$('#paste-import').addEventListener('click',()=>{
+  const text=$('#paste-area').value.trim();
+  const sk=$('#paste-source').value;
+  if(!text){toast('Paste CSV data first');return}
+  if(!sk){toast('Select a source');return}
+  const parsed=parseCSV(text,sk);
+  if(!parsed.length){toast('No expense transactions found');return}
+  txns.push(...parsed);
+  autoMatchRemaining();renderSources();updateStats();
+  toast(`Imported ${parsed.length} from ${SOURCE_MAP[sk].name}`);
+  $('#paste-area').value='';
+});
+
+// Navigation
+$('#nav-import').addEventListener('click',()=>showView('v-import'));
+$('#nav-cat').addEventListener('click',()=>{
+  if(!txns.length){toast('Import CSVs first');return}
+  const next=nextUncategorized();
+  if(next>=0){showView('v-cat');showTxn(next)}
+  else{showView('v-sum');renderSummary();toast('All categorized')}
+});
+$('#nav-sum').addEventListener('click',()=>{showView('v-sum');renderSummary()});
+$('#nav-rules').addEventListener('click',()=>{showView('v-rules');renderRules()});
+
+// Copy buttons
+$('#copy-pl').addEventListener('click',copyPL);
+$('#copy-pl2').addEventListener('click',copyPL);
+$('#copy-txns').addEventListener('click',copyTxns);
+$('#copy-txns2').addEventListener('click',copyTxns);
+
+// Export/Import rules
+$('#export-rules').addEventListener('click',()=>{
+  const b=new Blob([JSON.stringify(rules,null,2)],{type:'application/json'});
+  const u=URL.createObjectURL(b);const a=document.createElement('a');
+  a.href=u;a.download='fracture-vendor-rules.json';a.click();URL.revokeObjectURL(u);toast('Rules exported');
+});
+$('#import-rules').addEventListener('click',()=>$('#rules-file').click());
+$('#rules-file').addEventListener('change',e=>{
+  if(!e.target.files[0])return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{const imp=JSON.parse(ev.target.result);let c=0;
+    for(const[k,v]of Object.entries(imp)){if(v&&v.routing){rules[k]=v;c++}}
+    saveRules();toast(`Imported ${c} rules`);renderRules()}catch(e){toast('Invalid file')}
+  };r.readAsText(e.target.files[0]);e.target.value='';
+});
+
+// Clear
+$('#clear-all').addEventListener('click',()=>{
+  if(confirm('Clear all transactions? (Rules kept)')){
+    txns=[];history=[];curIdx=-1;renderSources();updateStats();showView('v-import');toast('Cleared');
+  }
+});
+
+// Delete rule
+$('#rules-body').addEventListener('click',e=>{
+  if(e.target.classList.contains('rule-del')){
+    delete rules[e.target.dataset.v];saveRules();renderRules();toast('Rule deleted');
+  }
+});
+
+// Category search
+$('#cat-search').addEventListener('input',e=>{catFilter=e.target.value;renderCatGrid()});
+
+// Summary tabs
+$$('.tab').forEach(t=>t.addEventListener('click',()=>{
+  $$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');
+  const tab=t.dataset.tab;
+  $('#sum-tbl').classList.toggle('hidden',tab!=='summary');
+  $('#txn-list-wrap').classList.toggle('hidden',tab!=='txnlist');
+}));
+
+// Week change
+$('#week-start').addEventListener('change',()=>{updateStats()});
+$('#week-end').addEventListener('change',()=>{updateStats()});
+
+// ====================== KEYBOARD ======================
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT'){
+    if(e.target.id==='cat-search'&&e.key==='Enter'){
+      e.preventDefault();const fb=document.querySelector('.cat-btn');if(fb)assignOPEX(fb.dataset.cat);
+    }
+    return;
+  }
+  if($('#v-cat').classList.contains('hidden'))return;
+  const k=e.key.toLowerCase();
+  const ci=KEYS.indexOf(k);
+  if(ci>=0&&ci<OPEX_CATS.length){
+    e.preventDefault();
+    if(catFilter){
+      const vis=OPEX_CATS.filter(c=>c.toLowerCase().includes(catFilter.toLowerCase()));
+      if(ci<vis.length)assignOPEX(vis[ci]);
+    }else{assignOPEX(OPEX_CATS[ci])}
+    return;
+  }
+  if(k==='s'){e.preventDefault();skipTxn();return}
+  if(k==='z'){e.preventDefault();undo();return}
+  if(k==='enter'){e.preventDefault();confirmAutoMatch();return}
+  if(k==='/'){e.preventDefault();$('#cat-search').focus();return}
+});
+
+// ====================== INIT ======================
+loadRules();setDefaultWeek();updateStats();renderSources();renderCatGrid();
+</script>
+</body>
+</html>
